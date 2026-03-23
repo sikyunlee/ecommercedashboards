@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logistics & Product Analytics Dashboard</title>
+    <!-- External Dependencies -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        .chart-container { position: relative; margin: auto; height: 350px; width: 100%; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .heatmap-grid { display: grid; grid-template-columns: 60px repeat(24, 1fr); gap: 2px; }
+        .heatmap-cell { aspect-ratio: 1; border-radius: 2px; transition: transform 0.1s; cursor: pointer; }
+        .heatmap-cell:hover { transform: scale(1.2); z-index: 10; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .heatmap-label { font-size: 10px; color: #64748b; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-weight: 600; }
+        .hour-label { font-size: 8px; color: #94a3b8; text-align: center; padding-bottom: 2px; }
+        .dot-pulse { width: 8px; height: 8px; border-radius: 50%; background-color: #ef4444; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-900">
+
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 py-4 px-6 flex justify-between items-center sticky top-0 z-20">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 p-2 rounded-lg shadow-lg">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
+                </div>
+                <h1 class="text-xl font-bold text-slate-800 tracking-tight">Logistics & Product Pro</h1>
+            </div>
+            <div id="statusIndicator" class="flex items-center space-x-4">
+                <div id="fileStatus" class="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-500 uppercase flex items-center space-x-2">
+                    <div class="dot-pulse mr-2" id="statusPulse"></div>
+                    <span id="statusText">Waiting for files...</span>
+                </div>
+                <button onclick="resetApp()" class="text-xs font-bold text-slate-400 hover:text-red-500 uppercase transition-colors">Reset All</button>
+            </div>
+        </header>
+
+        <main class="flex-grow p-6">
+            <!-- Multi-Upload Section -->
+            <div id="uploadPrompt" class="max-w-4xl mx-auto mt-10 space-y-6">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl font-black text-slate-800">Connect Your Datasets</h2>
+                    <p class="text-slate-500 text-sm">Upload all three CSV files to enable the master analytics view.</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- File 1: Orders -->
+                    <div class="bg-white p-8 rounded-3xl border-2 border-dashed border-slate-200 hover:border-indigo-500 transition-all text-center relative overflow-hidden">
+                        <p class="text-xs font-bold text-slate-400 uppercase mb-4">1. Orders File</p>
+                        <div class="text-indigo-600 mb-4 flex justify-center"><svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg></div>
+                        <button onclick="document.getElementById('fileOrders').click()" class="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-colors">Upload Orders</button>
+                        <input type="file" id="fileOrders" class="hidden" accept=".csv">
+                        <div id="info1" class="mt-4 text-[10px] text-slate-400 uppercase tracking-widest font-bold">No file</div>
+                    </div>
+
+                    <!-- File 2: Order Items -->
+                    <div class="bg-white p-8 rounded-3xl border-2 border-dashed border-slate-200 hover:border-emerald-500 transition-all text-center relative overflow-hidden">
+                        <p class="text-xs font-bold text-slate-400 uppercase mb-4">2. Order Items File</p>
+                        <div class="text-emerald-600 mb-4 flex justify-center"><svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg></div>
+                        <button onclick="document.getElementById('fileItems').click()" class="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-100 transition-colors">Upload Items</button>
+                        <input type="file" id="fileItems" class="hidden" accept=".csv">
+                        <div id="info2" class="mt-4 text-[10px] text-slate-400 uppercase tracking-widest font-bold">No file</div>
+                    </div>
+
+                    <!-- File 3: Product Info -->
+                    <div class="bg-white p-8 rounded-3xl border-2 border-dashed border-slate-200 hover:border-amber-500 transition-all text-center relative overflow-hidden">
+                        <p class="text-xs font-bold text-slate-400 uppercase mb-4">3. Products File</p>
+                        <div class="text-amber-600 mb-4 flex justify-center"><svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg></div>
+                        <button onclick="document.getElementById('fileProducts').click()" class="bg-amber-50 text-amber-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-amber-100 transition-colors">Upload Products</button>
+                        <input type="file" id="fileProducts" class="hidden" accept=".csv">
+                        <div id="info3" class="mt-4 text-[10px] text-slate-400 uppercase tracking-widest font-bold">No file</div>
+                    </div>
+                </div>
+                
+                <div class="text-center pt-8">
+                    <button id="processBtn" disabled class="bg-slate-200 text-slate-400 px-12 py-4 rounded-2xl font-black shadow-lg cursor-not-allowed transition-all">
+                        Generate Analytics Dashboard
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dashboard Content -->
+            <div id="dashboard" class="hidden space-y-6 max-w-7xl mx-auto pb-20">
+                
+                <!-- KPI Section -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center md:text-left">Late Deliveries</p>
+                        <h3 id="kpiLate" class="text-2xl font-black text-slate-800 text-center md:text-left">0</h3>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center md:text-left">Total Purchases</p>
+                        <h3 id="kpiPurchases" class="text-2xl font-black text-slate-800 text-center md:text-left">0</h3>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center md:text-left">Total Customers</p>
+                        <h3 id="kpiCustomers" class="text-2xl font-black text-slate-800 text-center md:text-left">0</h3>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 bg-indigo-600 border-indigo-600">
+                        <p class="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1 text-center md:text-left">Total Revenue</p>
+                        <h3 id="kpiRevenue" class="text-2xl font-black text-white text-center md:text-left">$0.00</h3>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">Metric Type</label>
+                        <select id="metricSelect" class="w-full border border-slate-100 rounded-xl p-3 text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="late">Late Deliveries (Count)</option>
+                            <option value="purchases">Total Purchases (Count)</option>
+                            <option value="revenue">Total Revenue (Sum)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">Time Granularity</label>
+                        <select id="granularitySelect" class="w-full border border-slate-100 rounded-xl p-3 text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="weekly">Weekly View</option>
+                            <option value="monthly">Monthly View</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">Reference Date Column</label>
+                        <select id="dateColSelect" class="w-full border border-slate-100 rounded-xl p-3 text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                    </div>
+                </div>
+
+                <!-- Charts Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                        <h4 class="font-black text-slate-800 uppercase text-xs tracking-widest mb-6" id="trendTitle">Trend Analysis</h4>
+                        <div class="chart-container"><canvas id="trendChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                        <h4 class="font-black text-slate-800 uppercase text-xs tracking-widest mb-6">Top Product Categories</h4>
+                        <div class="chart-container"><canvas id="categoryChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Heatmap -->
+                <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                    <h4 class="font-black text-slate-800 uppercase text-xs tracking-widest mb-6">Customer Ordering Heatmap</h4>
+                    <div class="overflow-x-auto custom-scrollbar pb-4">
+                        <div class="min-w-[800px]">
+                            <div class="heatmap-grid mb-2">
+                                <div></div>
+                                <div class="hour-label">00</div><div class="hour-label">01</div><div class="hour-label">02</div><div class="hour-label">03</div>
+                                <div class="hour-label">04</div><div class="hour-label">05</div><div class="hour-label">06</div><div class="hour-label">07</div>
+                                <div class="hour-label">08</div><div class="hour-label">09</div><div class="hour-label">10</div><div class="hour-label">11</div>
+                                <div class="hour-label">12</div><div class="hour-label">13</div><div class="hour-label">14</div><div class="hour-label">15</div>
+                                <div class="hour-label">16</div><div class="hour-label">17</div><div class="hour-label">18</div><div class="hour-label">19</div>
+                                <div class="hour-label">20</div><div class="hour-label">21</div><div class="hour-label">22</div><div class="hour-label">23</div>
+                            </div>
+                            <div id="heatmapBody" class="space-y-1"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div id="toast" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+            <div class="bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold flex items-center space-x-3">
+                <div id="toastIcon" class="w-2 h-2 rounded-full bg-indigo-500"></div>
+                <span id="toastText"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let datasets = { orders: null, items: null, products: null };
+        let masterData = [];
+        let charts = { trend: null, category: null };
+
+        const norm = (val) => val ? val.toString().trim() : '';
+
+        const infoMap = {
+            'fileOrders': 'info1',
+            'fileItems': 'info2',
+            'fileProducts': 'info3'
+        };
+
+        Object.keys(infoMap).forEach(inputId => {
+            const inputElem = document.getElementById(inputId);
+            if (inputElem) {
+                inputElem.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    const type = inputId.replace('file', '').toLowerCase();
+                    const labelElem = document.getElementById(infoMap[inputId]);
+                    
+                    if (labelElem) {
+                        labelElem.innerText = "Processing...";
+                        labelElem.className = "mt-4 text-[10px] text-indigo-500 font-black animate-pulse uppercase";
+                    }
+
+                    Papa.parse(file, {
+                        header: true, dynamicTyping: true, skipEmptyLines: true,
+                        complete: (results) => {
+                            if (results.errors.length > 0) {
+                                showToast("CSV Parsing Error", "error");
+                                if (labelElem) labelElem.innerText = "Error";
+                                return;
+                            }
+                            datasets[type] = results.data;
+                            if (labelElem) {
+                                labelElem.innerText = results.data.length.toLocaleString() + " rows";
+                                labelElem.className = "mt-4 text-[10px] text-emerald-600 font-black uppercase tracking-widest";
+                            }
+                            checkReady();
+                        }
+                    });
+                });
+            }
+        });
+
+        function checkReady() {
+            const isReady = datasets.orders && datasets.items && datasets.products;
+            const btn = document.getElementById('processBtn');
+            const statusText = document.getElementById('statusText');
+            const statusPulse = document.getElementById('statusPulse');
+
+            if (isReady) {
+                btn.disabled = false;
+                btn.className = "bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all scale-105 active:scale-95 cursor-pointer";
+                btn.onclick = buildDashboard;
+                statusText.innerText = "All Datasets Connected";
+                statusPulse.style.backgroundColor = "#10b981";
+                showToast("Data connection verified.");
+            } else {
+                let missing = [];
+                if (!datasets.orders) missing.push("Orders");
+                if (!datasets.items) missing.push("Items");
+                if (!datasets.products) missing.push("Products");
+                statusText.innerText = "Awaiting: " + missing.join(", ");
+            }
+        }
+
+        function findColumn(data, possibleNames) {
+            if (!data || data.length === 0) return null;
+            const headers = Object.keys(data[0]);
+            return headers.find(h => possibleNames.some(p => h.toLowerCase().includes(p.toLowerCase())));
+        }
+
+        function buildDashboard() {
+            showToast("Joining relational data...");
+            
+            const pIdCol = findColumn(datasets.products, ['product_id']);
+            const pCatCol = findColumn(datasets.products, ['category_name', 'product_category']);
+            const oIdCol = findColumn(datasets.orders, ['order_id']);
+            const cIdCol = findColumn(datasets.orders, ['customer_id']);
+            const itemOIdCol = findColumn(datasets.items, ['order_id']);
+            const itemPIdCol = findColumn(datasets.items, ['product_id']);
+            const priceCol = findColumn(datasets.items, ['price']);
+            const shipCol = findColumn(datasets.items, ['shipping_charges', 'freight', 'shipping']);
+
+            const productMap = {};
+            datasets.products.forEach(p => {
+                if (p[pIdCol]) productMap[norm(p[pIdCol])] = p[pCatCol] || 'Other';
+            });
+
+            const itemsByOrder = {};
+            datasets.items.forEach(i => {
+                const oId = norm(i[itemOIdCol]);
+                if (!oId) return;
+                if (!itemsByOrder[oId]) itemsByOrder[oId] = [];
+                
+                const price = parseFloat(i[priceCol]) || 0;
+                const ship = parseFloat(i[shipCol]) || 0;
+                
+                itemsByOrder[oId].push({
+                    category: productMap[norm(i[itemPIdCol])] || 'Uncategorized',
+                    value: price + ship
+                });
+            });
+
+            masterData = datasets.orders.map(order => {
+                const oId = norm(order[oIdCol]);
+                const items = itemsByOrder[oId] || [];
+                return {
+                    ...order,
+                    id: oId,
+                    customer: norm(order[cIdCol]),
+                    items: items,
+                    order_value: items.reduce((s, i) => s + i.value, 0),
+                    is_late: checkLateness(order)
+                };
+            }).filter(o => o.id !== '');
+
+            if (masterData.length === 0) {
+                showToast("Join failure. Verify primary keys.", "error");
+                return;
+            }
+
+            setupUI();
+            updateAll();
+        }
+
+        function checkLateness(o) {
+            const delCol = findColumn([o], ['delivered_timestamp', 'delivered_at']);
+            const estCol = findColumn([o], ['estimated_delivery_date', 'estimated_at']);
+            if (!o[delCol] || !o[estCol]) return false;
+            return new Date(o[delCol]) > new Date(o[estCol]);
+        }
+
+        function setupUI() {
+            document.getElementById('uploadPrompt').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            
+            const dateSelect = document.getElementById('dateColSelect');
+            dateSelect.innerHTML = '';
+            const orderHeaders = Object.keys(datasets.orders[0]);
+            orderHeaders.forEach(k => {
+                if (k.toLowerCase().includes('date') || k.toLowerCase().includes('time')) {
+                    dateSelect.add(new Option(k, k));
+                }
+            });
+            if (dateSelect.options.length === 0) dateSelect.add(new Option('Record ID', 'id'));
+
+            ['metricSelect', 'granularitySelect', 'dateColSelect'].forEach(id => {
+                document.getElementById(id).addEventListener('change', updateAll);
+            });
+        }
+
+        function updateAll() {
+            const late = masterData.filter(o => o.is_late).length;
+            const purchases = masterData.length;
+            const customers = new Set(masterData.map(o => o.customer)).size;
+            const revenue = masterData.reduce((sum, o) => sum + o.order_value, 0);
+
+            document.getElementById('kpiLate').innerText = late.toLocaleString();
+            document.getElementById('kpiPurchases').innerText = purchases.toLocaleString();
+            document.getElementById('kpiCustomers').innerText = customers.toLocaleString();
+            document.getElementById('kpiRevenue').innerText = '$' + revenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+            renderCharts();
+            renderHeatmap();
+        }
+
+        function renderCharts() {
+            const metric = document.getElementById('metricSelect').value;
+            const dateCol = document.getElementById('dateColSelect').value;
+            const gran = document.getElementById('granularitySelect').value;
+
+            const timeGroups = {};
+            masterData.forEach(o => {
+                const d = new Date(o[dateCol]);
+                if (isNaN(d)) return;
+                
+                let key = '';
+                if (gran === 'monthly') {
+                    key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                } else {
+                    const start = new Date(d);
+                    start.setDate(d.getDate() - d.getDay());
+                    key = `W/O ${start.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}`;
+                }
+
+                if (!timeGroups[key]) timeGroups[key] = 0;
+                if (metric === 'late') timeGroups[key] += (o.is_late ? 1 : 0);
+                else if (metric === 'purchases') timeGroups[key] += 1;
+                else if (metric === 'revenue') timeGroups[key] += o.order_value;
+            });
+
+            const trendLabels = Object.keys(timeGroups).sort();
+            const trendData = trendLabels.map(l => timeGroups[l]);
+
+            const ctx1 = document.getElementById('trendChart').getContext('2d');
+            if (charts.trend) charts.trend.destroy();
+            charts.trend = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: trendLabels,
+                    datasets: [{
+                        data: trendData,
+                        borderColor: '#4f46e5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.05)',
+                        fill: true, tension: 0.4, borderWidth: 4, pointRadius: 2
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+
+            const catGroups = {};
+            masterData.forEach(o => o.items.forEach(i => catGroups[i.category] = (catGroups[i.category] || 0) + 1));
+            const topCats = Object.entries(catGroups).sort((a,b) => b[1] - a[1]).slice(0, 8);
+
+            const ctx2 = document.getElementById('categoryChart').getContext('2d');
+            if (charts.category) charts.category.destroy();
+            charts.category = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: topCats.map(c => c[0]),
+                    datasets: [{ data: topCats.map(c => c[1]), backgroundColor: '#10b981', borderRadius: 6 }]
+                },
+                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function renderHeatmap() {
+            const dateCol = document.getElementById('dateColSelect').value;
+            const matrix = Array.from({ length: 7 }, () => Array(24).fill(0));
+            let max = 0;
+
+            masterData.forEach(o => {
+                const d = new Date(o[dateCol]);
+                if (isNaN(d)) return;
+                const day = d.getDay();
+                const hour = d.getHours();
+                matrix[day][hour]++;
+                if (matrix[day][hour] > max) max = matrix[day][hour];
+            });
+
+            const body = document.getElementById('heatmapBody');
+            body.innerHTML = '';
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+            matrix.forEach((row, dIdx) => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'heatmap-grid';
+                const label = document.createElement('div');
+                label.className = 'heatmap-label';
+                label.innerText = days[dIdx];
+                rowDiv.appendChild(label);
+
+                row.forEach((val, hIdx) => {
+                    const cell = document.createElement('div');
+                    cell.className = 'heatmap-cell';
+                    const intensity = max === 0 ? 0 : val / max;
+                    cell.style.backgroundColor = intensity === 0 ? '#f1f5f9' : `rgba(79, 70, 229, ${intensity})`;
+                    cell.title = `${days[dIdx]} at ${hIdx}:00 - ${val} orders`;
+                    rowDiv.appendChild(cell);
+                });
+                body.appendChild(rowDiv);
+            });
+        }
+
+        function showToast(m, type = 'info') {
+            const t = document.getElementById('toast');
+            document.getElementById('toastText').innerText = m;
+            document.getElementById('toastIcon').className = type === 'error' ? 'w-2 h-2 rounded-full bg-red-500' : 'w-2 h-2 rounded-full bg-indigo-500';
+            t.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 4000);
+        }
+
+        function resetApp() { location.reload(); }
+    </script>
+</body>
+</html>
