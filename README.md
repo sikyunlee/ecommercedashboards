@@ -4,7 +4,7 @@ An interactive, browser-side data visualization tool designed to analyze logisti
 
 ## 🚀 Live Demo
 You can access the live, interactive dashboard here:
-sikyunlee.github.io
+[sikyunlee.github.io](https://sikyunlee.github.io/ecommercedashboards/)
 
 ## 📊 Key Features & KPIs
 This dashboard provides a comprehensive view of e-commerce operations by joining three distinct datasets (Orders, Items, and Products) directly in the browser.
